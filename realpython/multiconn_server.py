@@ -4,31 +4,17 @@ import selectors
 import socket
 import sys
 import types
-import pickle
-import json
 
 sel = selectors.DefaultSelector()
-
-sensor_data = {
-    "Temperature": 1,
-    "Humidity": 2,
-    "Soil Moisture": 3,
-    "Wind Speed": 4
-}
 
 
 def accept_wrapper(sock):
     conn, addr = sock.accept()  # Should be ready to read
     print(f"Accepted connection from {addr}")
     conn.setblocking(False)
-    data = types.SimpleNamespace(
-        addr=addr, 
-        inb=b"", 
-        outb=b""
-    )
+    data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
     sel.register(conn, events, data=data)
-
 
 
 def service_connection(key, mask):
@@ -37,23 +23,19 @@ def service_connection(key, mask):
     if mask & selectors.EVENT_READ:
         recv_data = sock.recv(1024)  # Should be ready to read
         if recv_data:
-            data.inb += recv_data
+            data.outb += recv_data
         else:
             print(f"Closing connection to {data.addr}")
             sel.unregister(sock)
             sock.close()
-    
-    if mask & selectors.EVENT_WRITE: # If "Requesting data." was received, send sensor data.
-        if (data.inb and (len(data.inb) >= 16)):
-            if (data.inb.decode() == "Requesting data."):
-                msg = json.dumps(sensor_data).encode()
-                msg_size = f"{len(msg):0>4}".encode()
-                data.outb = msg_size + msg
-            data.inb = b""
-        if (data.outb):
-            print(f"Data being sent: {data.outb}")
-            num_bytes_sent = sock.send(data.outb)  # Should be ready to write
-            data.outb = data.outb[num_bytes_sent:]
+    if mask & selectors.EVENT_WRITE:
+        if data.outb:
+            print(f"Echoing {data.outb!r} to {data.addr}")
+            msg = f"Dear client {data.addr} I'm shitting in your pants."
+            if  type(msg) == str:
+                msg = msg.encode()
+            sent = sock.send(msg) #sock.send(f"Dear client {data.addr} I'm shitting in your pants.")  # Should be ready to write
+            data.outb = data.outb[sent:]
 
 
 if len(sys.argv) != 3:
