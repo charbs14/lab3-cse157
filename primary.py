@@ -90,6 +90,12 @@ def poll_sensor_data(sock):
 #     "Wind Speed": adc_to_wind_speed(adc1015.value)
 # }
 
+my_sensor_datum = {
+    "Temperature": 1,
+    "Humidity": 2,
+    "Soil Moisture": 3,
+    "Wind Speed": 4
+}
 
 if ((len(sys.argv) % 2) != 1):
     print(f"# of given arguments should be a multiple of 2!")
