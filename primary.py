@@ -1,75 +1,62 @@
 #!/usr/bin/env python3
 #Primary. AKA the client.
 
-import selectors
+
 import socket
 import sys
 import types
 import pickle
 import time
 import json
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+from collections import Counter
 
-sel = selectors.DefaultSelector()
+SOCKET_TIMEOUT = 2
+
+def dict_avg(sequence):
+    avg = Counter()
+    num_fields = 4
+    for i in range(len(sequence)):
+        avg += Counter(sequence[i])
+    avg = dict(avg)
+    for i in range(num_fields):
+        avg[list(avg.keys())[i]] = avg[list(avg.keys())[i]]/num_fields
+    return avg
+
+def recvAll(sock, expected_num_bytes_recv):
+    num_bytes_recv = 0
+    total_data_recv = b""
+    while (num_bytes_recv < expected_num_bytes_recv):
+        curr_data_recv = sock.recv(1024)
+        total_data_recv += curr_data_recv
+        num_bytes_recv += len(total_data_recv)
+    return total_data_recv
 
 def start_connection(host, port):
     server_addr = (host, port)
     print(f"Starting connection to {server_addr}")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setblocking(False)
     sock.connect_ex(server_addr)
+    sock.settimeout(SOCKET_TIMEOUT)
+    return sock
 
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    data = types.SimpleNamespace(
-        addr=server_addr,
-        expected_num_bytes_recv=0,
-        num_bytes_recv=0,
-        inb=b"",
-        outb=b"",
-    )
-    sel.register(sock, events, data=data)
+def poll_sensor_data(sock):
+    try:
+        sock.sendall(b"Requesting data.")
+        expected_num_bytes_recv = int(sock.recv(4))
+        sensor_datum = json.loads(recvAll(sock, expected_num_bytes_recv))
+    except TimeoutError:
+        sensor_datum = None
+    return sensor_datum
 
-hasNotBeenPolled = None
-dataHasBeenReceived = None
-sensor_data = None
-def service_connection(key, mask):
-    sock = key.fileobj
-    data = key.data
-
-    if mask & selectors.EVENT_READ:
-        if (data.expected_num_bytes_recv == 0): # If new data, retrieve header length.
-            data.expected_num_bytes_recv = int(sock.recv(4))
-        
-        if (recv_data := sock.recv(1024)):
-            data.inb += recv_data
-            data.num_bytes_recv += len(recv_data)
-        else:
-            # print(f"Closing connection {data.addr}")
-            # sel.unregister(sock)
-            # sock.close()
-            # TODO
-            # Add timeout check?
-            # Should set dataHasBeenReceived to True, but sensor_data[data.addr] will remain None.
-            pass
-        
-        if (data.num_bytes_recv >= data.expected_num_bytes_recv): # If all expected data has been received...
-            sensor_datum = json.loads(data.inb.decode())
-            # print(f"Received {sensor_datum} from addr {data.addr}")
-            data.expected_num_bytes_recv = 0
-            data.inb = b""
-            dataHasBeenReceived[data.addr] = True
-            sensor_data[data.addr] = sensor_datum
-            # TODO
-            # Convert from json bytes to dict. Store somewhere. Return?
-    
-    if mask & selectors.EVENT_WRITE: # & (hasNotBeenPolled[data.addr]):
-        if not data.outb and hasNotBeenPolled[data.addr]: # (Re)Load the message.
-            data.outb = b"Requesting data."
-            hasNotBeenPolled[data.addr] = False
-        
-        if data.outb:                       # Send the message. 
-            print(f"Sending {data.outb!r} to addr {data.addr}")
-            num_bytes_sent = sock.send(data.outb)  # Send the data that is ready. Keep track of the # of bytes that was sent.
-            data.outb = data.outb[num_bytes_sent:] # Delete the sent data. Prepare to send any yet-to-be-sent data on the next service_connection() call(s).
+my_sensor_datum = {
+    "Temperature": 10,
+    "Humidity": 20,
+    "Soil Moisture": 30,
+    "Wind Speed": 40
+}
 
 if ((len(sys.argv) % 2) != 1):
     print(f"# of given arguments should be a multiple of 2!")
@@ -78,38 +65,73 @@ if ((len(sys.argv) % 2) != 1):
 
 num_connections = ((len(sys.argv) - 1) // 2)
 
-server_addrs = tuple((sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections))
-conn_ids = {server_addrs[i]:i for i in range(num_connections)}
-dataHasBeenReceived = {server_addrs[i]:False for i in range(num_connections)}
-hasNotBeenPolled = {server_addrs[i]:True for i in range(num_connections)}
-sensor_data = {server_addrs[i]:None for i in range(num_connections)}
-print(f"hasNotBeenPolled = {hasNotBeenPolled}")
+colors = None
+if num_connections == 2:
+    colors = ["#FF0000", "#0000FF", "#00FF00", "#000000"]
 
-for i in range(num_connections):
-    start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2]))
+sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections)]
+plot_names = [f"Sec{i}" for i in range(num_connections)]
+plot_names += ["Primary", "Avg"]
+
+# Create folder if it doesn't exist. Otherwise, plt.savefig() raises an error.
+plot_folder_name = "plots"
+os.makedirs(f"./{plot_folder_name}", exist_ok=True)
 
 try:
+    iteration = 0
     while True:
-        events = sel.select(timeout=1)
-        # print(bool(events))
-        if events:
-            for key, mask in events:
-                service_connection(key, mask)
-                # sleep
-        if not sel.get_map(): # If no open sockets registered to selector, break
-            break
-        
-        if all(dataHasBeenReceived.values()): #(not any(hasNotBeenPolled.values())):  
-            for addr in hasNotBeenPolled.keys(): # Reset polling tracker if all has been polled
-                hasNotBeenPolled[addr] = True
-            print(f"sensor_data = {sensor_data}")
-            # TODO
-            # Poll self.
-            # Organize data. 
-            # If none, plot. Also plot self data.
-            # Set sensor_data values to none.
+        sensor_data = [poll_sensor_data(sockets[i]) for i in range(num_connections)]
+        print(sensor_data)
+        sensor_data.append(my_sensor_datum)
+        sensor_data.append(dict_avg(sensor_data))
+
+        # Calculate avg. Blah blah
+        #plot_sensor_data(sensor_data, round)
+
+        fig, axs = plt.subplots(2, 2)
+        fig.suptitle("RAAAAAAAAAAAAAAAGH")
+        axs[0, 0].scatter(
+            plot_names,
+            [sensor_datum["Soil Moisture"] for sensor_datum in sensor_data],
+            c=colors
+        )
+        axs[0, 0].set_ylabel("Moisture")
+        axs[0, 0].set_title("Soil Moisture Sensor")
+
+        axs[0, 1].scatter(
+            plot_names,
+            [sensor_datum["Temperature"] for sensor_datum in sensor_data],
+            c=colors
+        )
+        axs[0, 1].set_ylabel("Temperature (°C)")
+        axs[0, 1].set_title("Temperature Sensor")
+
+
+        axs[1, 0].scatter(
+            plot_names,
+            [sensor_datum["Wind Speed"] for sensor_datum in sensor_data],
+            c=colors
+        )
+        axs[1, 0].set_ylabel("Speed (m/s)")
+        axs[1, 0].set_title("Wind Speed Sensor")
+
+
+        axs[1, 1].scatter(
+            plot_names,
+            [sensor_datum["Humidity"] for sensor_datum in sensor_data],
+            c=colors
+        )
+        axs[1, 1].set_ylabel("Humidity (%)")
+        axs[1, 1].set_title("Humidity Sensor")
+        fig.tight_layout()
+
+        plt.savefig(f"./{plot_folder_name}/polling-plot-{iteration}.png")
+        plt.close(fig)
         time.sleep(1)
+        iteration += 1
 except KeyboardInterrupt:
     print("Caught keyboard interrupt, exiting")
+
 finally:
-    sel.close()
+    for sock in sockets:
+        sock.close()
