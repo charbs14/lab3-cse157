@@ -6,7 +6,6 @@ import socket
 import sys
 import time
 import json
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 from collections import Counter
@@ -28,12 +27,12 @@ def dict_avg(sensor_data):
     return avg
 
 def recvAll(sock, expected_num_bytes_recv):
-    num_bytes_recv = 0
+    total_num_bytes_recv = 0
     total_data_recv = b""
-    while (num_bytes_recv < expected_num_bytes_recv):
-        curr_data_recv = sock.recv(expected_num_bytes_recv)
+    while (total_num_bytes_recv < expected_num_bytes_recv):
+        curr_data_recv = sock.recv(expected_num_bytes_recv - total_num_bytes_recv)
         total_data_recv += curr_data_recv
-        num_bytes_recv += len(total_data_recv)
+        total_num_bytes_recv += len(curr_data_recv)
     return total_data_recv
 
 def start_connection(host, port):
@@ -58,11 +57,13 @@ def poll_sensor_data(sock):
         }
     return sensor_datum
 
-def plot_and_save_as_png(sensor_data, number):
-    # Create "plots" folder if it doesn't exist. Otherwise, plt.savefig() raises an error.
-    plot_folder_name = "plots"
-    os.makedirs(f"./{plot_folder_name}", exist_ok=True)
 
+
+# Create "plots" folder if it doesn't exist. Otherwise, plt.savefig() raises an error.
+plot_folder_name = "plots"
+os.makedirs(f"./{plot_folder_name}", exist_ok=True)
+
+def plot_and_save_as_png(sensor_data, number):
     fig, axs = plt.subplots(2, 2)
     axs[1,0].scatter(
         plot_names,
@@ -80,7 +81,6 @@ def plot_and_save_as_png(sensor_data, number):
     axs[0,0].set_ylabel("Temperature (°C)")
     axs[0,0].set_title("Temperature Sensor")
 
-
     axs[1,1].scatter(
         plot_names,
         [sensor_datum["Wind Speed"] for sensor_datum in sensor_data],
@@ -88,7 +88,6 @@ def plot_and_save_as_png(sensor_data, number):
     )
     axs[1,1].set_ylabel("Wind Speed (m/s)")
     axs[1,1].set_title("Wind Sensor")
-
 
     axs[0,1].scatter(
         plot_names,
@@ -155,13 +154,15 @@ if ((len(sys.argv) % 2) != 1):
 
 num_connections = ((len(sys.argv) - 1) // 2)
 
-colors = None
-if num_connections == 2:
-    colors = ["#FF0000", "#0000FF", "#00FF00", "#000000"]
+
 
 sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections)]
 plot_names = [f"Sec{i}" for i in range(num_connections)]
 plot_names += ["Primary", "Avg"]
+
+colors = None
+if num_connections == 2:
+    colors = ["#FF0000", "#0000FF", "#00FF00", "#000000"]
 
 try:
     iteration = 0
@@ -172,7 +173,7 @@ try:
         print(sensor_data)
 
         plot_and_save_as_png(sensor_data, iteration)
-        
+
         iteration += 1
         time.sleep(1)
 except KeyboardInterrupt:
