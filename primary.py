@@ -17,21 +17,21 @@ def dict_avg(sensor_data):
     avg = Counter()
 
     # Get the # of datums with no Nones.
-    # Assumes that, if the first is not None, then the rest probably aren't None.
+    # Assumes that, if the first is not None, then the rest probably aren't None. Good enough.
     num_valid_datums = sum(bool(sensor_datum[list(sensor_datum.keys())[0]]) for sensor_datum in sensor_data)
-    num_fields = 4
-    for i in range(len(sensor_data)):
-        avg += Counter(sensor_data[i])
+
+    for sensor_datum in sensor_data:
+        avg += Counter(sensor_datum)
     avg = dict(avg)
-    for i in range(num_fields):
-        avg[list(avg.keys())[i]] = avg[list(avg.keys())[i]]/num_valid_datums
+    for key in avg.keys():
+        avg[key] = avg[key]/num_valid_datums
     return avg
 
 def recvAll(sock, expected_num_bytes_recv):
     num_bytes_recv = 0
     total_data_recv = b""
     while (num_bytes_recv < expected_num_bytes_recv):
-        curr_data_recv = sock.recv(1024)
+        curr_data_recv = sock.recv(expected_num_bytes_recv)
         total_data_recv += curr_data_recv
         num_bytes_recv += len(total_data_recv)
     return total_data_recv
@@ -49,7 +49,7 @@ def poll_sensor_data(sock):
         sock.sendall(b"Requesting data.")
         expected_num_bytes_recv = int(sock.recv(4))
         sensor_datum = json.loads(recvAll(sock, expected_num_bytes_recv))
-    except TimeoutError:
+    except (TimeoutError, ValueError): # JSONDecodeError is subclass of ValueError
         sensor_datum = {
             "Temperature": None,
             "Humidity": None,
@@ -58,7 +58,49 @@ def poll_sensor_data(sock):
         }
     return sensor_datum
 
+def plot_and_save_as_png(sensor_data, number):
+    # Create "plots" folder if it doesn't exist. Otherwise, plt.savefig() raises an error.
+    plot_folder_name = "plots"
+    os.makedirs(f"./{plot_folder_name}", exist_ok=True)
 
+    fig, axs = plt.subplots(2, 2)
+    axs[1,0].scatter(
+        plot_names,
+        [sensor_datum["Soil Moisture"] for sensor_datum in sensor_data],
+        c=colors
+    )
+    axs[1,0].set_ylabel("Moisture")
+    axs[1,0].set_title("Soil Moisture Sensor")
+
+    axs[0,0].scatter(
+        plot_names,
+        [sensor_datum["Temperature"] for sensor_datum in sensor_data],
+        c=colors
+    )
+    axs[0,0].set_ylabel("Temperature (°C)")
+    axs[0,0].set_title("Temperature Sensor")
+
+
+    axs[1,1].scatter(
+        plot_names,
+        [sensor_datum["Wind Speed"] for sensor_datum in sensor_data],
+        c=colors
+    )
+    axs[1,1].set_ylabel("Wind Speed (m/s)")
+    axs[1,1].set_title("Wind Sensor")
+
+
+    axs[0,1].scatter(
+        plot_names,
+        [sensor_datum["Humidity"] for sensor_datum in sensor_data],
+        c=colors
+    )
+    axs[0,1].set_ylabel("Humidity (%)")
+    axs[0,1].set_title("Humidity Sensor")
+    fig.tight_layout()
+
+    plt.savefig(f"./{plot_folder_name}/polling-plot-{number}.png")
+    plt.close(fig)
 
 
 # from simpleio import map_range
@@ -121,52 +163,6 @@ sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in rang
 plot_names = [f"Sec{i}" for i in range(num_connections)]
 plot_names += ["Primary", "Avg"]
 
-
-
-def plot_and_save_as_png(sensor_data):
-    # Create folder if it doesn't exist. Otherwise, plt.savefig() raises an error.
-    plot_folder_name = "plots"
-    os.makedirs(f"./{plot_folder_name}", exist_ok=True)
-
-    fig, axs = plt.subplots(2, 2)
-    axs[1,0].scatter(
-        plot_names,
-        [sensor_datum["Soil Moisture"] for sensor_datum in sensor_data],
-        c=colors
-    )
-    axs[1,0].set_ylabel("Moisture")
-    axs[1,0].set_title("Soil Moisture Sensor")
-
-    axs[0,0].scatter(
-        plot_names,
-        [sensor_datum["Temperature"] for sensor_datum in sensor_data],
-        c=colors
-    )
-    axs[0,0].set_ylabel("Temperature (°C)")
-    axs[0,0].set_title("Temperature Sensor")
-
-
-    axs[1,1].scatter(
-        plot_names,
-        [sensor_datum["Wind Speed"] for sensor_datum in sensor_data],
-        c=colors
-    )
-    axs[1,1].set_ylabel("Speed (m/s)")
-    axs[1,1].set_title("Wind Speed Sensor")
-
-
-    axs[0,1].scatter(
-        plot_names,
-        [sensor_datum["Humidity"] for sensor_datum in sensor_data],
-        c=colors
-    )
-    axs[0,1].set_ylabel("Humidity (%)")
-    axs[0,1].set_title("Humidity Sensor")
-    fig.tight_layout()
-
-    plt.savefig(f"./{plot_folder_name}/polling-plot-{iteration}.png")
-    plt.close(fig)
-
 try:
     iteration = 0
     while True:
@@ -174,14 +170,11 @@ try:
         sensor_data.append(my_sensor_datum)
         sensor_data.append(dict_avg(sensor_data))
         print(sensor_data)
-        
 
-        # Calculate avg. Blah blah
-        plot_and_save_as_png(sensor_data)
-
+        plot_and_save_as_png(sensor_data, iteration)
         
-        time.sleep(1)
         iteration += 1
+        time.sleep(1)
 except KeyboardInterrupt:
     print("Caught keyboard interrupt, exiting")
 
