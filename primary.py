@@ -13,20 +13,21 @@ from collections import Counter
 SOCKET_TIMEOUT = 2
 
 def dict_avg(sensor_data):
-    avg = Counter()
-
     # Get the # of datums with no Nones.
     # Assumes that, if the first is not None, then the rest probably aren't None. Good enough.
-    num_valid_datums = sum(bool(sensor_datum[list(sensor_datum.keys())[0]]) for sensor_datum in sensor_data)
+    num_valid_datums = sum(int(sensor_datum["Temperature"] is not None) for sensor_datum in sensor_data) # list(sensor_datum.keys())[0]]
 
+    avg = Counter()
     for sensor_datum in sensor_data:
         avg += Counter(sensor_datum)
     avg = dict(avg)
+
     for key in avg.keys():
         avg[key] = avg[key]/num_valid_datums
+    
     return avg
 
-def recvAll(sock, expected_num_bytes_recv):
+def recvAll(sock, expected_num_bytes_recv): #recvAtleast
     total_num_bytes_recv = 0
     total_data_recv = b""
     while (total_num_bytes_recv < expected_num_bytes_recv):
@@ -63,36 +64,36 @@ def poll_sensor_data(sock):
 plot_folder_name = "plots"
 os.makedirs(f"./{plot_folder_name}", exist_ok=True)
 
-def plot_and_save_as_png(sensor_data, number):
+def plot_and_save_as_png(sensor_data, number, color_list, x_label_list):
     fig, axs = plt.subplots(2, 2)
     axs[1,0].scatter(
-        plot_names,
+        x_label_list,
         [sensor_datum["Soil Moisture"] for sensor_datum in sensor_data],
-        c=colors
+        c=color_list
     )
     axs[1,0].set_ylabel("Moisture")
     axs[1,0].set_title("Soil Moisture Sensor")
 
     axs[0,0].scatter(
-        plot_names,
+        x_label_list,
         [sensor_datum["Temperature"] for sensor_datum in sensor_data],
-        c=colors
+        c=color_list
     )
     axs[0,0].set_ylabel("Temperature (°C)")
     axs[0,0].set_title("Temperature Sensor")
 
     axs[1,1].scatter(
-        plot_names,
+        x_label_list,
         [sensor_datum["Wind Speed"] for sensor_datum in sensor_data],
-        c=colors
+        c=color_list
     )
     axs[1,1].set_ylabel("Wind Speed (m/s)")
     axs[1,1].set_title("Wind Sensor")
 
     axs[0,1].scatter(
-        plot_names,
+        x_label_list,
         [sensor_datum["Humidity"] for sensor_datum in sensor_data],
-        c=colors
+        c=color_list
     )
     axs[0,1].set_ylabel("Humidity (%)")
     axs[0,1].set_title("Humidity Sensor")
@@ -154,15 +155,10 @@ if ((len(sys.argv) % 2) != 1):
 
 num_connections = ((len(sys.argv) - 1) // 2)
 
-
-
 sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections)]
-plot_names = [f"Sec{i}" for i in range(num_connections)]
-plot_names += ["Primary", "Avg"]
 
-colors = None
-if num_connections == 2:
-    colors = ["#FF0000", "#0000FF", "#00FF00", "#000000"]
+color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (num_connections == 2) else None # Red, Blue, Green, Black
+x_label_list = [f"Sec{i}" for i in range(num_connections)] + ["Primary", "Avg"]
 
 try:
     iteration = 0
@@ -172,7 +168,7 @@ try:
         sensor_data.append(dict_avg(sensor_data))
         print(sensor_data)
 
-        plot_and_save_as_png(sensor_data, iteration)
+        plot_and_save_as_png(sensor_data, iteration, color_list, x_label_list)
 
         iteration += 1
         time.sleep(1)
