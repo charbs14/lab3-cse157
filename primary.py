@@ -103,54 +103,55 @@ def plot_and_save_as_png(sensor_data, number, color_list, x_label_list):
     plt.close(fig)
 
 
-# from simpleio import map_range
-# import board # Pi4
-# import busio # Pi4 GPIO
-# import adafruit_ads1x15.ads1015 as ADS          # ADC
-# from adafruit_ads1x15.analog_in import AnalogIn # ADC
-# from adafruit_seesaw.seesaw import Seesaw # Soil sensor
-# import adafruit_sht31d                    # sht30 temperature sensor
+from simpleio import map_range
+import board # Pi4
+import busio # Pi4 GPIO
+import adafruit_ads1x15.ads1015 as ADS          # ADC
+from adafruit_ads1x15.analog_in import AnalogIn # ADC
+from adafruit_seesaw.seesaw import Seesaw # Soil sensor
+import adafruit_sht31d                    # sht30 temperature sensor
 
-# i2c = busio.I2C(board.SCL, board.SDA)
+i2c = busio.I2C(board.SCL, board.SDA)
 
-# adc1015 = AnalogIn(ADS.ADS1015(i2c), ADS.P0)
-# sht30 = adafruit_sht31d.SHT31D(i2c)
-# soilsensor = Seesaw(i2c, addr=0x36)
+adc1015 = AnalogIn(ADS.ADS1015(i2c), ADS.P0)
+sht30 = adafruit_sht31d.SHT31D(i2c)
+soilsensor = Seesaw(i2c, addr=0x36)
 
-# def adc_to_wind_speed(V):
-#     PI4_VOLTAGE = 3.3
-#     ANEMOMETER_MIN_VOLT = 0.4
-#     ANEMOMETER_MAX_VOLT = 2
-#     MIN_WIND_SPEED = 0
-#     MAX_WIND_SPEED = 32.4      
+def adc_to_wind_speed(V):
+    PI4_VOLTAGE = 3.3
+    ANEMOMETER_MIN_VOLT = 0.4
+    ANEMOMETER_MAX_VOLT = 2
+    MIN_WIND_SPEED = 0
+    MAX_WIND_SPEED = 32.4      
 
-#     MAP_INPUT_ZERO_VALUE = 7679.4
-#     ANEMOMETER_RESTING_VALUE = 3264
-#     VALUE_OFFSET = MAP_INPUT_ZERO_VALUE - ANEMOMETER_RESTING_VALUE
+    MAP_INPUT_ZERO_VALUE = 7679.4
+    ANEMOMETER_RESTING_VALUE = 1090.667#3264
+    VALUE_OFFSET = MAP_INPUT_ZERO_VALUE - ANEMOMETER_RESTING_VALUE
 
-#     return map_range(((V + VALUE_OFFSET) / 65535) * PI4_VOLTAGE, 
-#                      ANEMOMETER_MIN_VOLT, ANEMOMETER_MAX_VOLT,
-#                      MIN_WIND_SPEED, MAX_WIND_SPEED
-#     )
+    return map_range(((V + VALUE_OFFSET) / 65535) * PI4_VOLTAGE, 
+                     ANEMOMETER_MIN_VOLT, ANEMOMETER_MAX_VOLT,
+                     MIN_WIND_SPEED, MAX_WIND_SPEED
+    )
 
+
+def my_sensor_datum():
+    return {
+        "Temperature": sht30.temperature,
+        "Humidity": sht30.relative_humidity,
+        "Soil Moisture": soilsensor.moisture_read(),
+        "Wind Speed": adc1015.value #adc_to_wind_speed(adc1015.value)
+    }
 
 # my_sensor_datum = {
-#     "Temperature": sht30.temperature,
-#     "Humidity": sht30.relative_humidity,
-#     "Soil Moisture": soilsensor.moisture_read(),
-#     "Wind Speed": adc_to_wind_speed(adc1015.value)
+#     "Temperature": 12,
+#     "Humidity": 21,
+#     "Soil Moisture": 32,
+#     "Wind Speed": 46
 # }
-
-my_sensor_datum = {
-    "Temperature": 12,
-    "Humidity": 21,
-    "Soil Moisture": 32,
-    "Wind Speed": 46
-}
 
 if ((len(sys.argv) % 2) != 1):
     print(f"# of given arguments should be a multiple of 2!")
-    print(f"Usage: {sys.argv[0]} <host1> <port1> <host2> <port2> ... <hostn> <portn>")
+    print(f"Usage: {sys.argv[0]} <ipaddr1> <port1> <ipaddr1> <port2> ... <ipaddrn> <portn>")
     sys.exit(1)
 
 num_connections = ((len(sys.argv) - 1) // 2)
@@ -164,7 +165,7 @@ try:
     iteration = 0
     while True:
         sensor_data = [poll_sensor_data(sockets[i]) for i in range(num_connections)]
-        sensor_data.append(my_sensor_datum)
+        sensor_data.append(my_sensor_datum())
         sensor_data.append(dict_avg(sensor_data))
         print(sensor_data)
 
