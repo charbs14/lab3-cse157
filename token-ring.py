@@ -10,6 +10,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import board
 import busio
+import numpy as np
+
 from simpleio import map_range
 from adafruit_seesaw.seesaw import Seesaw
 import adafruit_sht31d
@@ -21,9 +23,9 @@ matplotlib.use('Agg')
 
 # im not sure if we are manually assigning the ips or using isc-dhcp but if we manually assign it things would probably be easier and we can put the ips here
 PI_CONFIG = {
-    1: {"ip": "192.168.1.1"}, 
-    2: {"ip": "192.168.1.2"},
-    3: {"ip": "192.168.1.3"}, 
+    1: {"ip": "169.233.1.1"},
+    2: {"ip": "169.233.1.2"},
+    3: {"ip": "169.233.1.3"},
 }
 
 LISTEN_PORT = 65432
@@ -96,18 +98,24 @@ class RingNode:
     def _client_send_to_next(self, payload_dict):
         message_payload_json = json.dumps(payload_dict)
         self.logger.info(f"Attempting to send to Pi{self.next_pi_id} ({self.next_pi_ip}): {message_payload_json[:150]}...")
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_client:
-                sock_client.settimeout(10.0) 
-                sock_client.connect((self.next_pi_ip, self.next_pi_port))
-                sock_client.sendall(message_payload_json.encode('utf-8'))
-            self.logger.info(f"Successfully sent data to Pi{self.next_pi_id}.")
-        except socket.timeout:
-            self.logger.error(f"Timeout connecting to Pi{self.next_pi_id} at {self.next_pi_ip}.")
-        except ConnectionRefusedError:
-            self.logger.error(f"Connection refused by Pi{self.next_pi_id} at {self.next_pi_ip}.")
-        except Exception as e:
-            self.logger.error(f"Error sending data to Pi{self.next_pi_id}: {e}")
+        try_to_send = True
+        while try_to_send:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_client:
+                    sock_client.settimeout(10.0) 
+                    sock_client.connect((self.next_pi_ip, self.next_pi_port))
+                    sock_client.sendall(message_payload_json.encode('utf-8'))
+                self.logger.info(f"Successfully sent data to Pi{self.next_pi_id}.")
+                try_to_send = False
+            except socket.timeout:
+                self.logger.error(f"Timeout connecting to Pi{self.next_pi_id} at {self.next_pi_ip}.")
+                try_to_send = False
+            except ConnectionRefusedError:
+                self.logger.error(f"Connection refused by Pi{self.next_pi_id} at {self.next_pi_ip}. Retrying...")
+                time.sleep(5)
+            except Exception as e:
+                self.logger.error(f"Error sending data to Pi{self.next_pi_id}: {e}")
+                try_to_send = False
 
     def _plot_data_and_prepare_response(self, received_payload):
         round_num = received_payload.get("round", "unknown_round")
@@ -335,10 +343,12 @@ class RingNode:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ring Communication Node for Raspberry Pi.")
     parser.add_argument("pi_id", type=int, choices=[1, 2, 3], help="ID of this Pi node (1, 2, or 3)")
+    parser.add_argument("port", type=int)
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
     pi_id_arg = args.pi_id
+    port_arg = args.port
 
     logger_with_context = logging.LoggerAdapter(base_slogger, {'pi_id': pi_id_arg})
     if args.debug:
@@ -354,7 +364,7 @@ if __name__ == "__main__":
     logger_with_context.info(f"Starting Node {pi_id_arg} with IP {my_ip_address} on port {LISTEN_PORT}")
 
     node = RingNode(host_ip=my_ip_address,
-                    port=LISTEN_PORT,
+                    port=port_arg,
                     pi_id=pi_id_arg,
                     ring_config=PI_CONFIG,
                     logger=logger_with_context)
