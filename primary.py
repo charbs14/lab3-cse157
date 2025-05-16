@@ -12,6 +12,14 @@ from collections import Counter
 
 SOCKET_TIMEOUT = 2
 
+
+def dict_sum(sensor_data): # Using counter breaks if any of the fields are 0 (e.g., wind speed)
+    keys = sensor_data[0].keys()
+    dict_summed = {key:sum(sensor_datum[key] for sensor_datum in sensor_data) for key in sensor_data[0].keys()}
+    return dict_summed
+    # for dictionary in sensor_data:
+    #     for key in keys
+
 def dict_avg(sensor_data):
     # Get the # of datums with no Nones.
     # Assumes that, if the first is not None, then the rest probably aren't None. Good enough.
@@ -20,14 +28,9 @@ def dict_avg(sensor_data):
     for sensor_datum in sensor_data:
         if (sensor_datum["Temperature"] is not None):
             valid_sensors.append(sensor_datum)
-
     # num_valid_datums = sum(int(sensor_datum["Temperature"] is not None) for sensor_datum in sensor_data) # list(sensor_datum.keys())[0]]
-
-    avg = Counter()
-    for sensor_datum in valid_sensors:
-        avg += Counter(sensor_datum)
-    avg = dict(avg)
-
+    avg = {key:sum(sensor_datum[key] for sensor_datum in valid_sensors) for key in valid_sensors[0].keys()}
+    print(f"sum = {avg}")
     for key in avg.keys():
         avg[key] = avg[key]/len(valid_sensors)
     
@@ -166,7 +169,8 @@ sockets = []
 for i in range(num_connections):
     try:
         sockets.append(start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])))
-    except ConnectionRefusedError:
+    except ConnectionRefusedError as e:
+        print(e)
         pass
 
 try:
@@ -178,7 +182,8 @@ try:
         for sock in sockets_copy:
             try:
                 sensor_data.append(poll_sensor_data(sock))
-            except BrokenPipeError:
+            except BrokenPipeError as e:
+                print(e)
                 sock.close()
                 sockets.remove(sock)
         sensor_data.append(my_sensor_datum())
@@ -187,6 +192,7 @@ try:
         color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (len(sockets) == 2) else None # Red, Blue, Green, Black
         x_label_list = [f"Sec{i}" for i in range(len(sockets))] + ["Primary", "Avg"]
         print(f"Round {iteration} ######################")
+        # print(sensor_data)
         for i in range(len(sensor_data)):
             print(f">{x_label_list[i]:>8}:\t{sensor_data[i]}".expandtabs(11))
         
