@@ -189,10 +189,10 @@ try:
                 print(e)
                 sock.close()
                 sockets.remove(sock)
+        sensor_data_len = len(sensor_data) + 2
         sensor_data.append(my_sensor_datum())
         sensor_data.append(dict_avg(sensor_data))
-        sensor_data_len = len(sensor_data)
-        sockets_len = len(sockets)
+        sockets_len = sensor_data_len - 2
 
         color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (sockets_len == 2) else None # Red, Blue, Green, Black
         x_label_list = [f"Sec{i}" for i in range(sockets_len)] + ["Primary", "Avg"]
