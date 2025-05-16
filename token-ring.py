@@ -23,9 +23,9 @@ matplotlib.use('Agg')
 
 # im not sure if we are manually assigning the ips or using isc-dhcp but if we manually assign it things would probably be easier and we can put the ips here
 PI_CONFIG = {
-    1: {"ip": "169.233.1.1"},
-    2: {"ip": "169.233.1.2"},
-    3: {"ip": "169.233.1.3"},
+    1: {"ip": "169.233.97.1"},
+    2: {"ip": "169.233.97.2"},
+    3: {"ip": "169.233.97.3"},
 }
 
 LISTEN_PORT = 65432
