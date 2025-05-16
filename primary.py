@@ -179,6 +179,9 @@ try:
         # sensor_data = [poll_sensor_data(sockets[i]) for i in range(num_connections)]
         sockets_copy = sockets
         sensor_data = list()
+        if (len(sockets) == 0):
+            raise Exception("No more connections")
+        
         for sock in sockets_copy:
             try:
                 sensor_data.append(poll_sensor_data(sock))
