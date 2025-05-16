@@ -191,12 +191,14 @@ try:
                 sockets.remove(sock)
         sensor_data.append(my_sensor_datum())
         sensor_data.append(dict_avg(sensor_data))
+        sensor_data_len = len(sensor_data)
+        sockets_len = len(sockets)
 
-        color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (len(sockets) == 2) else None # Red, Blue, Green, Black
-        x_label_list = [f"Sec{i}" for i in range(len(sockets))] + ["Primary", "Avg"]
+        color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (sockets_len == 2) else None # Red, Blue, Green, Black
+        x_label_list = [f"Sec{i}" for i in range(sockets_len)] + ["Primary", "Avg"]
         print(f"Round {iteration} ######################")
         # print(sensor_data)
-        for i in range(len(sensor_data)):
+        for i in range(sensor_data_len):
             print(f">{x_label_list[i]:>8}:\t{sensor_data[i]}".expandtabs(11))
         
         plot_and_save_as_png(sensor_data, iteration, color_list, x_label_list)
