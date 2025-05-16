@@ -52,7 +52,7 @@ class RingNode:
 
         self.next_pi_id = (self.pi_id % 3) + 1
         self.next_pi_ip = self.ring_config.get(self.next_pi_id, {}).get("ip", DEFAULT_PI_IP)
-        self.next_pi_port = LISTEN_PORT
+        self.next_pi_port = port
 
         self.server_socket = None
         self.current_round = 0 
@@ -279,6 +279,7 @@ class RingNode:
             received_bytes_total = b""
             try:
                 while True: 
+                    time.sleep(1)
                     chunk = sock.recv(4096) 
                     if not chunk: 
                         break
