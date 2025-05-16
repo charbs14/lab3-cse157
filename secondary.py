@@ -54,6 +54,12 @@ def my_sensor_datum():
         "Soil Moisture": soilsensor.moisture_read(),
         "Wind Speed": adc_to_wind_speed(adc1015.value)
     }
+    # return {
+    #     "Temperature": 1,
+    #     "Humidity": 2,
+    #     "Soil Moisture": 3,
+    #     "Wind Speed": 4
+    # }
 
 
 def accept_wrapper(sock):
@@ -94,7 +100,7 @@ def service_connection(key, mask):
 
 
 if len(sys.argv) != 3:
-    print(f"Usage: {sys.argv[0]} <host> <port>")
+    print(f"Usage: {sys.argv[0]} <ipaddr> <port>")
     sys.exit(1)
 
 host, port = sys.argv[1], int(sys.argv[2])

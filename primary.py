@@ -15,15 +15,21 @@ SOCKET_TIMEOUT = 2
 def dict_avg(sensor_data):
     # Get the # of datums with no Nones.
     # Assumes that, if the first is not None, then the rest probably aren't None. Good enough.
-    num_valid_datums = sum(int(sensor_datum["Temperature"] is not None) for sensor_datum in sensor_data) # list(sensor_datum.keys())[0]]
+
+    valid_sensors = []
+    for sensor_datum in sensor_data:
+        if (sensor_datum["Temperature"] is not None):
+            valid_sensors.append(sensor_datum)
+
+    # num_valid_datums = sum(int(sensor_datum["Temperature"] is not None) for sensor_datum in sensor_data) # list(sensor_datum.keys())[0]]
 
     avg = Counter()
-    for sensor_datum in sensor_data:
+    for sensor_datum in valid_sensors:
         avg += Counter(sensor_datum)
     avg = dict(avg)
 
     for key in avg.keys():
-        avg[key] = avg[key]/num_valid_datums
+        avg[key] = avg[key]/len(valid_sensors)
     
     return avg
 
@@ -40,7 +46,7 @@ def start_connection(host, port):
     server_addr = (host, port)
     print(f"Starting connection to {server_addr}")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect_ex(server_addr)
+    sock.connect(server_addr)
     sock.settimeout(SOCKET_TIMEOUT)
     return sock
 
@@ -125,7 +131,7 @@ def adc_to_wind_speed(V):
     MAX_WIND_SPEED = 32.4      
 
     MAP_INPUT_ZERO_VALUE = 7679.4
-    ANEMOMETER_RESTING_VALUE = 1090.667#3264
+    ANEMOMETER_RESTING_VALUE = 3264
     VALUE_OFFSET = MAP_INPUT_ZERO_VALUE - ANEMOMETER_RESTING_VALUE
 
     return map_range(((V + VALUE_OFFSET) / 65535) * PI4_VOLTAGE, 
@@ -133,49 +139,65 @@ def adc_to_wind_speed(V):
                      MIN_WIND_SPEED, MAX_WIND_SPEED
     )
 
-
 def my_sensor_datum():
     return {
         "Temperature": sht30.temperature,
         "Humidity": sht30.relative_humidity,
         "Soil Moisture": soilsensor.moisture_read(),
-        "Wind Speed": adc1015.value #adc_to_wind_speed(adc1015.value)
+        "Wind Speed": adc_to_wind_speed(adc1015.value)
     }
-
-# my_sensor_datum = {
-#     "Temperature": 12,
-#     "Humidity": 21,
-#     "Soil Moisture": 32,
-#     "Wind Speed": 46
-# }
+    # return {
+    #     "Temperature": 1,
+    #     "Humidity": 2,
+    #     "Soil Moisture": 3,
+    #     "Wind Speed": 4
+    # }
 
 if ((len(sys.argv) % 2) != 1):
     print(f"# of given arguments should be a multiple of 2!")
-    print(f"Usage: {sys.argv[0]} <ipaddr1> <port1> <ipaddr1> <port2> ... <ipaddrn> <portn>")
+    print(f"Usage: {sys.argv[0]} <ipaddr1> <port1> <ipaddr2> <port2> ... <ipaddrn> <portn>")
     sys.exit(1)
 
 num_connections = ((len(sys.argv) - 1) // 2)
 
-sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections)]
+# sockets = [start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])) for i in range(num_connections)]
 
-color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (num_connections == 2) else None # Red, Blue, Green, Black
-x_label_list = [f"Sec{i}" for i in range(num_connections)] + ["Primary", "Avg"]
+sockets = []
+for i in range(num_connections):
+    try:
+        sockets.append(start_connection(sys.argv[2*i+1], int(sys.argv[2*i+2])))
+    except ConnectionRefusedError:
+        pass
 
 try:
     iteration = 0
     while True:
-        sensor_data = [poll_sensor_data(sockets[i]) for i in range(num_connections)]
+        # sensor_data = [poll_sensor_data(sockets[i]) for i in range(num_connections)]
+        sockets_copy = sockets
+        sensor_data = list()
+        for sock in sockets_copy:
+            try:
+                sensor_data.append(poll_sensor_data(sock))
+            except BrokenPipeError:
+                sock.close()
+                sockets.remove(sock)
         sensor_data.append(my_sensor_datum())
         sensor_data.append(dict_avg(sensor_data))
-        print(sensor_data)
 
+        color_list = ["#FF0000", "#0000FF", "#00FF00", "#000000"] if (len(sockets) == 2) else None # Red, Blue, Green, Black
+        x_label_list = [f"Sec{i}" for i in range(len(sockets))] + ["Primary", "Avg"]
+        print(f"Round {iteration} ######################")
+        for i in range(len(sensor_data)):
+            print(f">{x_label_list[i]:>8}:\t{sensor_data[i]}".expandtabs(11))
+        
         plot_and_save_as_png(sensor_data, iteration, color_list, x_label_list)
 
         iteration += 1
         time.sleep(1)
 except KeyboardInterrupt:
     print("Caught keyboard interrupt, exiting")
-
+except Exception as e:
+    print(e)
 finally:
     for sock in sockets:
         sock.close()
