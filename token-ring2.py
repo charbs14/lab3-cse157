@@ -1,6 +1,7 @@
 import socket
 import selectors
 import subprocess
+import threading
 import types
 import logging
 import argparse
@@ -38,6 +39,8 @@ DB_PASSWORD = ''
 
 LISTEN_PORT = 65432
 DEFAULT_PI_IP = "127.0.0.1" 
+REJOIN_CHECK_INTERVAL = 3
+INITIAL_CYCLE_DELAY = 5
 
 base_slogger = logging.getLogger("(RingNode)")
 base_slogger.setLevel(level=logging.INFO)
@@ -75,7 +78,6 @@ class RingNode:
         self.sensor_ads_chan = None
         self._init_sensors() 
 
-        self.logger.info(f"Node initialized. Will send to Pi{self.next_pi_id} at {self.next_pi_ip}:{self.next_pi_port}")
 
     def _init_sensors(self):
         self.i2c = busio.I2C(board.SCL, board.SDA)
