@@ -31,10 +31,10 @@ PI_CONFIG = {
     3: {"ip": "169.233.97.3"},
 }
 
-DB_HOST = '10.0.0.178'
+DB_HOST = '192.168.0.146'
 DB_PORT = 3306
 DB = 'piSenseDB'
-DB_USER = ''
+DB_USER = 'remote'
 DB_PASSWORD = ''
 
 LISTEN_PORT = 65432
@@ -488,9 +488,9 @@ class RingNode:
             return False
 
         #self._run_shell_command(["sudo", "ifdown", "wlan0"], check=False) 
-        #if not self._run_shell_command(["sudo", "ifup", "wlan0"]):
-        #    self.logger.error("Failed to bring up wlan0 in ad-hoc mode via ifup. Critical error.")
-        #    return False
+        if not self._run_shell_command(["sudo", "ifup", "wlan0", "--force"]):
+            self.logger.error("Failed to bring up wlan0 in ad-hoc mode via ifup. Critical error.")
+            return False
 
         self.logger.info("Successfully switched to AD-HOC mode.")
         time.sleep(5) 
@@ -499,9 +499,11 @@ class RingNode:
     def run(self):
         self.logger.debug("Starting RingNode server component...")
         # Switch to Ad-Hoc mode on startup
-        if not self._switch_to_adhoc_mode():
-            self.logger.critical("Could not switch to Ad-Hoc mode on startup. Aborting.")
-            return
+        # if not self._switch_to_adhoc_mode():
+        #self.logger.critical("Could not switch to Ad-Hoc mode on startup. Aborting.")
+        #return
+        
+        self._switch_to_adhoc_mode()
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
