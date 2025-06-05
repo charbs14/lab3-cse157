@@ -487,10 +487,10 @@ class RingNode:
             self.logger.error("Failed to copy interfaces.adhoc. Ad-hoc mode might be broken!")
             return False
 
-        self._run_shell_command(["sudo", "ifdown", "wlan0"], check=False) 
-        if not self._run_shell_command(["sudo", "ifup", "wlan0"]):
-            self.logger.error("Failed to bring up wlan0 in ad-hoc mode via ifup. Critical error.")
-            return False
+        #self._run_shell_command(["sudo", "ifdown", "wlan0"], check=False) 
+        #if not self._run_shell_command(["sudo", "ifup", "wlan0"]):
+        #    self.logger.error("Failed to bring up wlan0 in ad-hoc mode via ifup. Critical error.")
+        #    return False
 
         self.logger.info("Successfully switched to AD-HOC mode.")
         time.sleep(5) 
